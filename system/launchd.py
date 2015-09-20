@@ -1,4 +1,22 @@
 #!/usr/bin/python
+# -*- coding: utf-8 -*-
+
+# (c) 2015, David Symons <Mult1m4c@gmail.com>
+#
+# This file is part of Ansible
+#
+# This module is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This software is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this software.  If not, see <http://www.gnu.org/licenses/>.
 
 import json
 import plistlib
@@ -8,6 +26,7 @@ DOCUMENTATION = '''
 module: launchd
 author: David Symons (multimac)
 short_description: Manage launchd on OS X
+version_added: "1.9"
 requirements:
   - OS X 10.10+
 description:
@@ -79,6 +98,7 @@ class LaunchCtl(object):
         self.auto_enable = module.params['auto_enable']
         self.force_kill = module.params['force_kill']
 
+        # Check whether label is specified, and if not load from plist
         if self.path and not self.label:
             # Read the label from the plist
             plist_file = open(self.path, 'r')
@@ -86,12 +106,23 @@ class LaunchCtl(object):
 
             self.label = plist['Label']
 
+        # Fail if we don't have a label as it's required (either specified or read from plist)
         if self.label is None:
             self.module.fail_json(msg="'label' or 'path' must be specified to infer the job label")
 
         self.target = self.domain + '/' + self.label
 
     def _get_launchctl_disabled(self, domain, is_disabled=True):
+        """Retrieves the enabled/disabled jobs in the given domain.
+
+        Note:
+            This only returns jobs which have been enabled/disabled
+            by 'launchctl [enable/disable]' or 'launchctl [load/unload] -w'.
+            Any jobs which aren't specified are enabled by default.
+
+            This also doesn't account for the 'Disabled' key in launchd plists.
+        """
+
         cmd = ['launchctl', 'print-disabled', domain]
         (rc, out, err) = self.module.run_command(cmd)
 
@@ -100,6 +131,7 @@ class LaunchCtl(object):
         else:
             ending = 'false'
 
+        # Parse the output of 'launchctl print-disabled [domain]' to retrieve only disabled/enabled jobs
         out = '\n'.join(
             map(lambda l: l.strip(), 
                 filter(lambda l: l.endswith(ending), out.splitlines())
@@ -109,29 +141,41 @@ class LaunchCtl(object):
         return (rc, out, err)
 
     def get_job_status(self, target):
+        """Returns the status of the given target"""
         cmd = ['launchctl', 'print', target]
         return self.module.run_command(cmd)
 
     def get_disabled_jobs(self, domain):
+        """Returns all jobs which are disabled"""
         return self._get_launchctl_disabled(domain, True)
 
     def get_enabled_jobs(self, domain):
+        """Returns all jobs which are enabled"""
         return self._get_launchctl_disabled(domain, False)
 
     def get_status(self):
+        """Returns the status of this job"""
         return self.get_job_status(self.target)
 
     def is_enabled(self):
+        """Returns whether this job is enabled"""
         quoted_label = "\"" + self.label + "\""
-        return quoted_label in self.get_enabled_jobs(self.domain)[1]
+        return quoted_label not in self.get_disabled_jobs(self.domain)[1]
 
     def is_loaded(self):
+        """Returns whether this job is loaded"""
         return self.get_status()[0] == 0
 
     def is_running(self):
+        """Returns whether this job is running"""
         return "state = running" in self.get_status()[1]
 
     def load(self):
+        """Load this job into launchd
+
+        Note:
+            Requires 'self.path' to be specified
+        """
         if self.path is None:
             self.module.fail_json(msg="'path' is required for loading jobs")
 
@@ -139,6 +183,11 @@ class LaunchCtl(object):
         return self.module.run_command(cmd)
 
     def unload(self):
+        """Unload this job into launchd
+
+        Note:
+            Requires 'self.path' to be specified
+        """
         if self.path is None:
             self.module.fail_json(msg="'path' is required for unloading jobs")
 
@@ -146,18 +195,22 @@ class LaunchCtl(object):
         return self.module.run_command(cmd)
 
     def enable(self):
+        """Enable this job in launchd"""
         cmd = ['launchctl', 'enable', self.target]
         return self.module.run_command(cmd)
 
     def disable(self):
+        """Disable this job in launchd"""
         cmd = ['launchctl', 'disable', self.target]
         return self.module.run_command(cmd)
 
     def start(self):
+        """Force this job to start"""
         cmd = ['launchctl', 'kickstart', self.target]
         return self.module.run_command(cmd)
 
     def stop(self):
+        """Force this job to stop"""
         if self.force_kill:
             signal = '-9'
         else:
@@ -167,6 +220,7 @@ class LaunchCtl(object):
         return self.module.run_command(cmd)
 
     def restart(self):
+        """Force a restart of this job"""
         cmd = ['launchctl', 'kickstart', '-k', self.target]
         return self.module.run_command(cmd)
 
@@ -175,6 +229,7 @@ def handle_loaded(launchctl):
     out = ''
     err = ''
 
+    # Enable this job and add the output if requested
     if launchctl.auto_enable:
         (rc, enable_out, enable_err) = handle_enabled(launchctl)
 
