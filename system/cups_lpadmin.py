@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-# (c) 2015, David Symons <Mult1m4c@gmail.com>
+# (c) 2015, David Symons (Multimac) <Mult1m4c@gmail.com>
 #
 # This file is part of Ansible
 #
@@ -25,7 +25,7 @@ import shlex
 DOCUMENTATION = '''
 ---
 module: cups_lpadmin
-author: David Symons (Multimac)
+author: David Symons (Multimac) <Mult1m4c@gmail.com>
 short_description: Manages printers in CUPS via lpadmin
 version_added: "1.9.2"
 requirements:
@@ -121,18 +121,21 @@ class CUPSPrinter(object):
 
         # Use lpd if a protocol is not specified
         if self.uri and '://' not in self.uri:
-            self.uri = 'lpd://{0}/'.format(uri)
+            self.uri = 'lpd://{0}/'.format(self.uri)
 
     def _get_installed_drivers(self):
         cmd = ['lpinfo', '-l', '-m']
         (rc, out, err) = self.module.run_command(cmd)
 
+        # We want to split on sections starting with "Model:" as that specifies
+        # a new available driver
         prog = re.compile("^Model:", re.MULTILINE)
         cups_drivers = re.split(prog, out)
 
         drivers = { }
         for d in cups_drivers:
 
+            # Skip if the line contains only whitespace
             if not d.strip():
                 continue
 
