@@ -27,7 +27,7 @@ DOCUMENTATION = '''
 module: cups_lpadmin
 author: David Symons (Multimac) <Mult1m4c@gmail.com>
 short_description: Manages printers in CUPS via lpadmin
-version_added: "1.9.2"
+version_added: "2.0"
 requirements:
   - CUPS 1.7+
 description:
