@@ -26,7 +26,7 @@ DOCUMENTATION = '''
 module: launchd
 author: David Symons (multimac)
 short_description: Manage launchd on OS X
-version_added: "1.9"
+version_added: "2.0"
 requirements:
   - OS X 10.10+
 description:
@@ -359,9 +359,6 @@ def main():
     )
 
     launchctl = LaunchCtl(module)
-
-    if launchctl.label is None:
-        module.fail_json(msg="At least one of 'label' or 'path' is required")
 
     rc = None
     out = ''
